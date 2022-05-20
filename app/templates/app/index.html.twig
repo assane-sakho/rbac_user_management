@@ -1,0 +1,268 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Hello AppController!
+{% endblock %}
+
+{% block body %}
+
+	<div class="row">
+		<div class="col-md-12 mt-3">
+			<div class="example-wrapper">
+				<table id="example" class="table table-bordered" style="width:100%" data-order='[[ 3, "desc" ]]'>
+					<thead>
+						<tr>
+							<th>Nom</th>
+							<th>Prenom</th>
+							<th>Poste</th>
+							<th>Roles</th>
+							<th>Modifier</th>
+						</tr>
+					</thead>
+					<tbody>
+						{% for user in users %}
+							<tr>
+								<td>{{ user.firstName }}</td>
+								<td>{{ user.lastName }}</td>
+								<td>{{ user.job }}</td>
+								<td>
+									{% if user.roles is empty %}
+										Aucun rôle
+									{% else %}
+										{{ user.roles|map(p => "#{p.libelle}")|join(', ') }}
+									{% endif %}
+								</td>
+								<td>
+									<button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#editUserRolesModal" data-id="{{ user.id }}" >
+										Modifier
+									</button>
+								</td>
+							</tr>
+						{% endfor %}
+					</tbody>
+				</table>
+			</div>
+		</div>
+	</div>
+	<div class="modal fade" id="editUserRolesModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+		<div class="modal-dialog modal-lg">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h5 class="modal-title" id="exampleModalLabel">Modification des rôles de <b id="usernameUserSelected"></b></h5>
+					<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+				</div>
+				<div class="modal-body">
+					<p id="modalContent">
+					</p>
+
+                    Rôles :
+                    <select id="rolesSelect" name="states[]" multiple="multiple" style="width: 50%">
+                        {% for role in roles %}
+                            <option value="{{ role.id }}">{{ role.libelle }}</option>
+                        {% endfor %}
+                    </select>
+				</div>
+				<div class="modal-footer">
+					<button id="btnSave" type="button" class="btn btn-primary">Enregistrer</button>
+					<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+				</div>
+			</div>
+		</div>
+	</div>
+     <div class="modal" id="confirmationModal" data-bs-backdrop="static">
+		<div class="modal-dialog modal-lg">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h5 class="modal-title" id="exampleModalLabel">Confirmation d'ajout des rôles</h5>
+					<button type="button" class="btn-close" data-bs-dismiss="modal" aria-hidden="true"></button>
+				</div>
+				<div class="container"></div>
+				<div class="modal-body">
+					<h3 class="text-danger">Attention <i class="fa-solid fa-triangle-exclamation"></i></h3>
+                    <p>
+                        Vous avez sélectionné les rôles <span id="selectedRolesLabels" class="text-success"></span> pour l'utilisateur <span id="userInfoConfirm" class="text-primary"></span>.<br><br>
+                        <b>L'entreprise applique le principe du moindre privilège : veuillez en aucun cas ajouter des rôles non nécessaires à l'exécution de ses missions.</b><br><br>
+                        
+                        La concentration de rôle sur un compte utilisateur représente un risque critique pour l'entreprise en cas de cyberattaque qui peut engendrer une <b><a target="_blank" href="https://www.ssi.gouv.fr/particulier/glossaire/e/">élévation de privilège</a></b>.<br><br>
+
+                        Je consens avoir vérifié l'adéquation du profil utilisateur avec les rôles sélectionnés :
+                        <input type="checkbox" id="consent">
+                    </p>
+				</div>
+				<div class="modal-footer">
+					<button id="btnConfirm" type="button" class="btn btn-danger">Valider</button>
+					<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+				</div>
+			</div>
+		</div>
+	</div>
+{% endblock %}
+{% block javascripts %}
+	{{ parent() }}
+
+    <script>
+		$(function () {
+            var selectedUserId;
+            var selectedUserRoles = [];
+            $("#btnSave").prop('disabled', true);
+
+            $("#modalContent").parent().hide();
+
+            $("#example").DataTable({
+                language: {
+                    sEmptyTable: "Aucune donnée disponible dans le tableau",
+                    sInfo:
+                        "Affichage de l'élément _START_ à _END_ sur _TOTAL_ éléments",
+                    sInfoEmpty: "Affichage de l'élément 0 à 0 sur 0 élément",
+                    sInfoFiltered: "(filtré à partir de _MAX_ éléments au total)",
+                    sInfoPostFix: "",
+                    sInfoThousands: ",",
+                    sLengthMenu: "Afficher _MENU_ éléments",
+                    sLoadingRecords: "Chargement...",
+                    sProcessing: "Traitement...",
+                    sSearch: "Rechercher :",
+                    sZeroRecords: "Aucun élément correspondant trouvé",
+                    oPaginate: {
+                        sFirst: "Premier",
+                        sLast: "Dernier",
+                        sNext: "Suivant",
+                        sPrevious: "Précédent",
+                    },
+                    oAria: {
+                        sSortAscending:
+                            ": activer pour trier la colonne par ordre croissant",
+                        sSortDescending:
+                            ": activer pour trier la colonne par ordre décroissant",
+                    },
+                    select: {
+                        rows: {
+                            _: "%d lignes sélectionnées",
+                            "0": "Aucune ligne sélectionnée",
+                            "1": "1 ligne sélectionnée",
+                        },
+                    },
+                }
+            });
+
+            $('#rolesSelect').select2({
+                dropdownParent: $('#editUserRolesModal')
+            });
+
+            $("#editUserRolesModal").on('show.bs.modal', function (e) {
+                $("#btnSave").prop('disabled', true);
+
+                selectedUserId = $(e.relatedTarget).data('id');
+                $.ajax({
+                    url: '/user',
+                    type: 'POST',
+                    data : { id : selectedUserId},
+                    success: function(data) {
+                        selectedUserRoles = data.selectedRolesId;
+                        
+                        var modalContent = `Le collaborateur <b>${data.username}</b> qui occupe le poste de <b>${data.job}</b>`;
+                        if(data.selectedRolesId.length > 0)
+                            modalContent +=` possède les rôles suivant : <span class="text-primary">${data.rolesConcat}</span>.`;
+                        else
+                            modalContent +=` ne possède aucun rôle.`;
+
+                        $("#usernameUserSelected").text(data.username);
+                        $("#modalContent").html(modalContent);
+
+                        $('#rolesSelect').val(data.selectedRolesId);
+                        $('#rolesSelect').trigger('change');
+
+                        $("#userInfoConfirm").text(`${data.username} (${data.job})`);
+
+
+                        $("#modalContent").parent().show();
+                    },
+                 });
+            });
+
+            $("#editUserRolesModal").on('hide.bs.modal', function (e) {
+               $("#modalContent").parent().hide();
+            });
+
+            $("#btnSave").click(function (e) {
+                $('#editUserRolesModal').modal('toggle');
+
+                if($('#rolesSelect').val().length > 0)
+                {
+                    $('#confirmationModal').modal('toggle');
+                }
+                else
+                {
+                    saveRole();
+                }
+            });
+
+            $("#confirmationModal").on('show.bs.modal', function (e) {
+                $("#btnConfirm").prop('disabled', true);
+
+                var roleLabels = $('#rolesSelect').select2('data')
+                                                    .map((opt) => opt.text)
+                                                    .join(', ');
+                $("#selectedRolesLabels").text(roleLabels);
+            });
+
+            $("#consent").on('change', function(e){
+                if($(this).is(':checked'))
+                {
+                    $("#btnConfirm").prop('disabled', false);
+                }
+                else
+                {
+                    $("#btnConfirm").prop('disabled', true);
+                }
+            })
+
+            $("#rolesSelect").on('change', function(e){
+                var currentRoles = $('#rolesSelect').val().map(function(item) {
+                                                                return parseInt(item);
+                                                             });
+                if(JSON.stringify(currentRoles) != JSON.stringify(selectedUserRoles))
+                {
+                    $("#btnSave").prop('disabled', false);
+                }
+                else
+                {
+                    $("#btnSave").prop('disabled', true);
+                }   
+            })
+
+            $("#btnConfirm").click(function (e) {
+                $('#confirmationModal').modal('toggle');
+                saveRole();
+            });
+
+            function saveRole()
+            {
+                $.ajax({
+                    url: '/save',
+                    type: 'POST',
+                    data : { id : selectedUserId, roles : $('#rolesSelect').val()},
+                    dataType: 'text',
+                    success: function(data) {
+                        toastr.success('Enregistrement effectué');
+                        location.reload();
+                    }
+                });
+            }
+        });
+       
+	</script>
+
+{% endblock %}
+{% block stylesheets %}
+	{{ parent() }}
+
+    <style>
+        .modal:nth-of-type(even) {
+            z-index: 1062 !important;
+        }
+        .modal-backdrop.show:nth-of-type(even) {
+            z-index: 1061 !important;
+        }
+    
+	</style>
+
+{% endblock %}
